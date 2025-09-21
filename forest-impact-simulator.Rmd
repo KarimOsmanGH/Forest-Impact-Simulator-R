@@ -31,7 +31,7 @@ If you have a CSV file with forest data, upload it here. The file should contain
 # Check if sample data file exists
 sample_file <- "sample-forest-planting-data.csv"
 if (file.exists(sample_file)) {
-  cat("**Sample data file found!** Loading data...\n\n")
+  cat("**Sample data file found!** Loading structured CSV data...\n\n")
   
   # Read the sample data file
   lines <- readLines(sample_file)
@@ -97,8 +97,12 @@ if (file.exists(sample_file)) {
   cat("\n**Planting Data:**\n")
   print(planting_data)
   
+  # Set flag to indicate we have structured data
+  has_structured_data <- TRUE
+  
 } else {
   cat("**No sample data file found.** Please provide your own data or use manual input below.\n\n")
+  has_structured_data <- FALSE
 }
 ```
 
@@ -157,13 +161,19 @@ if (mode == "planting") {
 
 ```{r calculations, echo=TRUE}
 # Process the data based on mode
-if (exists("tree_data") && nrow(tree_data) > 0) {
-  # Use data from CSV file
+if (exists("has_structured_data") && has_structured_data) {
+  # Use structured data from CSV file
   current_data <- tree_data
   area_ha <- as.numeric(planting_data$Value[planting_data$Metric == "Area (hectares)"])
   simulation_years <- as.numeric(metadata$Value[metadata$Parameter == "Simulation Years"])
   latitude <- as.numeric(metadata$Value[metadata$Parameter == "Latitude"])
   longitude <- as.numeric(metadata$Value[metadata$Parameter == "Longitude"])
+  
+  # Extract environmental values
+  soil_carbon <- as.numeric(env_data$Value[env_data$Metric == "Soil Carbon (g/kg)"])
+  soil_ph <- as.numeric(env_data$Value[env_data$Metric == "Soil pH"])
+  temperature <- as.numeric(env_data$Value[env_data$Metric == "Temperature (°C)"])
+  precipitation <- as.numeric(env_data$Value[env_data$Metric == "Precipitation (mm)"])
   
   # Create land data from existing structure
   land_data <- data.frame(
@@ -181,9 +191,24 @@ if (exists("tree_data") && nrow(tree_data) > 0) {
     longitude = longitude,
     simulation_years = simulation_years
   )
+  
+  # Create structured environmental data
+  env_data_structured <- data.frame(
+    soil_carbon = ifelse(is.na(soil_carbon), NA, soil_carbon),
+    soil_ph = ifelse(is.na(soil_ph), NA, soil_ph),
+    temperature = ifelse(is.na(temperature), 22.4, temperature),
+    precipitation = ifelse(is.na(precipitation), NA, precipitation)
+  )
+  
 } else {
   # Use manual data
   simulation_years <- location_data$simulation_years
+  env_data_structured <- data.frame(
+    soil_carbon = NA,
+    soil_ph = NA,
+    temperature = 22.4,
+    precipitation = NA
+  )
 }
 
 # Calculate CO2 impact based on mode
@@ -350,12 +375,12 @@ json_output <- list(
   ),
   environmentalData = list(
     soil = list(
-      carbon = as.numeric(env_data$Value[env_data$Metric == "Soil Carbon (g/kg)"]),
-      pH = as.numeric(env_data$Value[env_data$Metric == "Soil pH"])
+      carbon = env_data_structured$soil_carbon,
+      pH = env_data_structured$soil_ph
     ),
     climate = list(
-      temperature = as.numeric(env_data$Value[env_data$Metric == "Temperature (°C)"]),
-      precipitation = as.numeric(env_data$Value[env_data$Metric == "Precipitation (mm)"])
+      temperature = env_data_structured$temperature,
+      precipitation = env_data_structured$precipitation
     )
   ),
   impactResults = list(
@@ -439,7 +464,9 @@ if (simulation_years > 1 && mode == "planting") {
 
 ## Instructions for Use
 
-1. **Data Input**: Either upload a CSV file with forest data or modify the manual input section with your data.
+1. **Data Input**: 
+   - **Structured CSV**: Upload a CSV file with the exact format shown in `sample-forest-planting-data.csv` containing METADATA, SELECTED TREES, ENVIRONMENTAL DATA, IMPACT RESULTS, and PLANTING DATA sections
+   - **Manual Input**: Modify the manual input section with your data if no CSV file is available
 
 2. **Mode Selection**: Change the `mode` variable to either "planting" or "clear-cutting" based on your simulation needs.
 
@@ -449,7 +476,14 @@ if (simulation_years > 1 && mode == "planting") {
    - `processed_forest_data.csv`: Processed data in CSV format
    - `forest_impact_results.json`: Results in JSON format compatible with the web app
 
-5. **Customization**: Modify the environmental metrics, tree types, or calculation methods as needed for your specific use case.
+5. **CSV Format**: The notebook supports the structured CSV format with sections:
+   - **METADATA**: Timestamp, simulator version, simulation years, location coordinates
+   - **SELECTED TREES**: Tree name, scientific name, carbon sequestration rate, percentage
+   - **ENVIRONMENTAL DATA**: Soil carbon, pH, temperature, precipitation
+   - **IMPACT RESULTS**: Annual carbon sequestration, total carbon, biodiversity, resilience
+   - **PLANTING DATA**: Area, total trees, spacing, density
+
+6. **Customization**: Modify the environmental metrics, tree types, or calculation methods as needed for your specific use case.
 
 ## Notes
 

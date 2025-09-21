@@ -30,7 +30,18 @@ install.packages(c("tidyverse", "ggplot2", "jsonlite", "readr", "dplyr", "plotly
 
 ## Data Format
 
-Your CSV file should contain these columns:
+The notebook supports two input formats:
+
+### Structured CSV Format (Recommended)
+Upload a CSV file with the following sections:
+- **METADATA**: Timestamp, simulator version, simulation years, location coordinates
+- **SELECTED TREES**: Tree name, scientific name, carbon sequestration rate, percentage
+- **ENVIRONMENTAL DATA**: Soil carbon, pH, temperature, precipitation
+- **IMPACT RESULTS**: Annual carbon sequestration, total carbon, biodiversity, resilience
+- **PLANTING DATA**: Area, total trees, spacing, density
+
+### Manual Input Format
+If no CSV file is available, use manual input with these columns:
 - `land_id`: Unique identifier for each land plot
 - `area_ha`: Area in hectares
 - `tree_type`: Type of trees/species
