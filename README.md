@@ -64,6 +64,7 @@ The notebook generates:
 ## Related Projects
 
 - **Python Version**: [Forest-Impact-Simulator-Python](https://github.com/KarimOsmanGH/Forest-Impact-Simulator-Python)
+- **Web App**: Forest Impact Simulator Web Application
 
 ## License
 
