@@ -28,15 +28,21 @@ This notebook simulates the environmental impact of forest planting or clear-cut
 If you have a CSV file with forest data, upload it here. The file should contain columns for land identification, area, tree types, and carbon data.
 
 ```{r data-input, echo=FALSE, message=FALSE}
-# Check if sample data file exists
-sample_file <- "sample-forest-planting-data.csv"
-if (file.exists(sample_file)) {
-  cat("**Sample data file found!** Loading structured CSV data...\n\n")
+# Function to detect CSV format
+detect_csv_format <- function(file_path) {
+  lines <- readLines(file_path, n = 10)
+  if (any(grepl("^METADATA$", lines))) {
+    return("structured")
+  } else {
+    return("standard")
+  }
+}
+
+# Function to parse structured CSV
+parse_structured_csv <- function(file_path) {
+  lines <- readLines(file_path)
   
-  # Read the sample data file
-  lines <- readLines(sample_file)
-  
-  # Parse the structured data
+  # Find section boundaries
   metadata_start <- which(lines == "METADATA") + 1
   trees_start <- which(lines == "SELECTED TREES") + 1
   env_start <- which(lines == "ENVIRONMENTAL DATA") + 1
@@ -52,7 +58,6 @@ if (file.exists(sample_file)) {
   
   # Extract tree data
   tree_lines <- lines[trees_start:(env_start-2)]
-  tree_header <- strsplit(tree_lines[1], ",")[[1]]
   tree_data <- data.frame(
     Name = sapply(strsplit(tree_lines[-1], ","), `[`, 1),
     Scientific_Name = sapply(strsplit(tree_lines[-1], ","), `[`, 2),
@@ -67,13 +72,6 @@ if (file.exists(sample_file)) {
     Value = sapply(strsplit(env_lines[-1], ","), function(x) paste(x[-1], collapse = ","))
   )
   
-  # Extract impact results
-  impact_lines <- lines[impact_start:(planting_start-2)]
-  impact_data <- data.frame(
-    Metric = sapply(strsplit(impact_lines[-1], ","), `[`, 1),
-    Value = sapply(strsplit(impact_lines[-1], ","), function(x) paste(x[-1], collapse = ","))
-  )
-  
   # Extract planting data
   planting_lines <- lines[planting_start:length(lines)]
   planting_data <- data.frame(
@@ -81,28 +79,47 @@ if (file.exists(sample_file)) {
     Value = sapply(strsplit(planting_lines[-1], ","), function(x) paste(x[-1], collapse = ","))
   )
   
+  return(list(metadata = metadata, tree_data = tree_data, env_data = env_data, planting_data = planting_data))
+}
+
+# Check for CSV files
+structured_file <- "sample-forest-planting-data.csv"
+standard_file <- "sample-forest-data-standard.csv"
+has_csv_data <- FALSE
+csv_format <- "none"
+
+if (file.exists(structured_file)) {
+  cat("**Structured CSV file found!** Loading data...\n\n")
+  csv_data <- parse_structured_csv(structured_file)
+  has_csv_data <- TRUE
+  csv_format <- "structured"
+  
   # Display loaded data
   cat("**Metadata:**\n")
-  print(metadata)
+  print(csv_data$metadata)
   
   cat("\n**Tree Data:**\n")
-  print(tree_data)
+  print(csv_data$tree_data)
   
   cat("\n**Environmental Data:**\n")
-  print(env_data)
-  
-  cat("\n**Impact Results:**\n")
-  print(impact_data)
+  print(csv_data$env_data)
   
   cat("\n**Planting Data:**\n")
-  print(planting_data)
+  print(csv_data$planting_data)
   
-  # Set flag to indicate we have structured data
-  has_structured_data <- TRUE
+} else if (file.exists(standard_file)) {
+  cat("**Standard CSV file found!** Loading data...\n\n")
+  standard_data <- read.csv(standard_file, stringsAsFactors = FALSE)
+  has_csv_data <- TRUE
+  csv_format <- "standard"
+  
+  # Display loaded data
+  cat("**Standard CSV Data:**\n")
+  print(standard_data)
   
 } else {
-  cat("**No sample data file found.** Please provide your own data or use manual input below.\n\n")
-  has_structured_data <- FALSE
+  cat("**No CSV data files found.** Using manual input below.\n\n")
+  has_csv_data <- FALSE
 }
 ```
 
@@ -160,20 +177,20 @@ if (mode == "planting") {
 ## 3. Data Processing and Calculations
 
 ```{r calculations, echo=TRUE}
-# Process the data based on mode
-if (exists("has_structured_data") && has_structured_data) {
+# Process the data based on format and mode
+if (has_csv_data && csv_format == "structured") {
   # Use structured data from CSV file
-  current_data <- tree_data
-  area_ha <- as.numeric(planting_data$Value[planting_data$Metric == "Area (hectares)"])
-  simulation_years <- as.numeric(metadata$Value[metadata$Parameter == "Simulation Years"])
-  latitude <- as.numeric(metadata$Value[metadata$Parameter == "Latitude"])
-  longitude <- as.numeric(metadata$Value[metadata$Parameter == "Longitude"])
+  current_data <- csv_data$tree_data
+  area_ha <- as.numeric(csv_data$planting_data$Value[csv_data$planting_data$Metric == "Area (hectares)"])
+  simulation_years <- as.numeric(csv_data$metadata$Value[csv_data$metadata$Parameter == "Simulation Years"])
+  latitude <- as.numeric(csv_data$metadata$Value[csv_data$metadata$Parameter == "Latitude"])
+  longitude <- as.numeric(csv_data$metadata$Value[csv_data$metadata$Parameter == "Longitude"])
   
   # Extract environmental values
-  soil_carbon <- as.numeric(env_data$Value[env_data$Metric == "Soil Carbon (g/kg)"])
-  soil_ph <- as.numeric(env_data$Value[env_data$Metric == "Soil pH"])
-  temperature <- as.numeric(env_data$Value[env_data$Metric == "Temperature (°C)"])
-  precipitation <- as.numeric(env_data$Value[env_data$Metric == "Precipitation (mm)"])
+  soil_carbon <- as.numeric(csv_data$env_data$Value[csv_data$env_data$Metric == "Soil Carbon (g/kg)"])
+  soil_ph <- as.numeric(csv_data$env_data$Value[csv_data$env_data$Metric == "Soil pH"])
+  temperature <- as.numeric(csv_data$env_data$Value[csv_data$env_data$Metric == "Temperature (°C)"])
+  precipitation <- as.numeric(csv_data$env_data$Value[csv_data$env_data$Metric == "Precipitation (mm)"])
   
   # Create land data from existing structure
   land_data <- data.frame(
@@ -199,6 +216,27 @@ if (exists("has_structured_data") && has_structured_data) {
     temperature = ifelse(is.na(temperature), 22.4, temperature),
     precipitation = ifelse(is.na(precipitation), NA, precipitation)
   )
+  
+} else if (has_csv_data && csv_format == "standard") {
+  # Use standard CSV data
+  land_data <- standard_data
+  
+  # Extract location and simulation data from first row
+  location_data <- data.frame(
+    latitude = land_data$latitude[1],
+    longitude = land_data$longitude[1],
+    simulation_years = land_data$simulation_years[1]
+  )
+  
+  # Create environmental data from first row
+  env_data_structured <- data.frame(
+    soil_carbon = land_data$soil_carbon[1],
+    soil_ph = land_data$soil_ph[1],
+    temperature = land_data$temperature[1],
+    precipitation = land_data$precipitation[1]
+  )
+  
+  simulation_years <- location_data$simulation_years
   
 } else {
   # Use manual data
@@ -464,9 +502,10 @@ if (simulation_years > 1 && mode == "planting") {
 
 ## Instructions for Use
 
-1. **Data Input**: 
-   - **Structured CSV**: Upload a CSV file with the exact format shown in `sample-forest-planting-data.csv` containing METADATA, SELECTED TREES, ENVIRONMENTAL DATA, IMPACT RESULTS, and PLANTING DATA sections
-   - **Manual Input**: Modify the manual input section with your data if no CSV file is available
+1. **Data Input**: The notebook automatically detects and supports multiple formats:
+   - **Standard CSV** (Recommended): Simple table format in `sample-forest-data-standard.csv`
+   - **Structured CSV**: Complex format from web app in `sample-forest-planting-data.csv`
+   - **Manual Input**: Modify the manual input section with your data
 
 2. **Mode Selection**: Change the `mode` variable to either "planting" or "clear-cutting" based on your simulation needs.
 
@@ -476,7 +515,15 @@ if (simulation_years > 1 && mode == "planting") {
    - `processed_forest_data.csv`: Processed data in CSV format
    - `forest_impact_results.json`: Results in JSON format compatible with the web app
 
-5. **CSV Format**: The notebook supports the structured CSV format with sections:
+5. **CSV Formats Supported**:
+   
+   **Standard CSV Format** (Easy to use):
+   ```csv
+   land_id,area_ha,tree_type,scientific_name,carbon_per_ha,biodiversity_score,resilience_score,latitude,longitude,simulation_years,soil_carbon,soil_ph,temperature,precipitation
+   Plot_001,0.20,Oak,Quercus robur,22,4.5,4.5,50.56956736416948,28.159344338632376,50,,,22.4,
+   ```
+   
+   **Structured CSV Format** (From web app):
    - **METADATA**: Timestamp, simulator version, simulation years, location coordinates
    - **SELECTED TREES**: Tree name, scientific name, carbon sequestration rate, percentage
    - **ENVIRONMENTAL DATA**: Soil carbon, pH, temperature, precipitation

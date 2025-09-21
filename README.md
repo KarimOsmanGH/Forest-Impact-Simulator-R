@@ -32,17 +32,24 @@ install.packages(c("tidyverse", "ggplot2", "jsonlite", "readr", "dplyr", "plotly
 
 ## Data Format
 
-The notebook supports two input formats:
+The notebook automatically detects and supports **three input formats**:
 
-### Structured CSV Format (Recommended)
-Upload a CSV file with the following sections:
+### Standard CSV Format (Recommended - Easy to Use)
+Simple table format that R can read directly:
+```csv
+land_id,area_ha,tree_type,scientific_name,carbon_per_ha,biodiversity_score,resilience_score,latitude,longitude,simulation_years,soil_carbon,soil_ph,temperature,precipitation
+Plot_001,0.20,Oak,Quercus robur,22,4.5,4.5,50.56956736416948,28.159344338632376,50,,,22.4,
+```
+
+### Structured CSV Format (From Web App)
+Complex format with multiple sections:
 - **METADATA**: Timestamp, simulator version, simulation years, location coordinates
 - **SELECTED TREES**: Tree name, scientific name, carbon sequestration rate, percentage
 - **ENVIRONMENTAL DATA**: Soil carbon, pH, temperature, precipitation
 - **IMPACT RESULTS**: Annual carbon sequestration, total carbon, biodiversity, resilience
 - **PLANTING DATA**: Area, total trees, spacing, density
 
-**💡 Get CSV Format**: You can generate the proper CSV format by running a simulation on the [Forest Impact Simulator Web App](https://forest-impact-simulator.vercel.app/) and downloading the results. The web app will export data in the exact format required by this R notebook.
+**💡 Get CSV Format**: You can generate the structured CSV format by running a simulation on the [Forest Impact Simulator Web App](https://forest-impact-simulator.vercel.app/) and downloading the results.
 
 ### Manual Input Format
 If no CSV file is available, use manual input with these columns:
