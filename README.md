@@ -22,11 +22,13 @@ A comprehensive R Markdown notebook for simulating forest carbon impacts, biodiv
 install.packages(c("tidyverse", "ggplot2", "jsonlite", "readr", "dplyr", "plotly"))
 ```
 
-2. Open `forest-impact-simulator.Rmd` in RStudio
+2. **Get CSV Data** (Optional): Visit [Forest Impact Simulator Web App](https://forest-impact-simulator.vercel.app/) to run a simulation and download CSV data, or use the included sample data
 
-3. Run all code chunks to perform the analysis
+3. Open `forest-impact-simulator.Rmd` in RStudio
 
-4. Check the `output/` directory for generated files
+4. Run all code chunks to perform the analysis
+
+5. Check the `output/` directory for generated files
 
 ## Data Format
 
@@ -39,6 +41,8 @@ Upload a CSV file with the following sections:
 - **ENVIRONMENTAL DATA**: Soil carbon, pH, temperature, precipitation
 - **IMPACT RESULTS**: Annual carbon sequestration, total carbon, biodiversity, resilience
 - **PLANTING DATA**: Area, total trees, spacing, density
+
+**💡 Get CSV Format**: You can generate the proper CSV format by running a simulation on the [Forest Impact Simulator Web App](https://forest-impact-simulator.vercel.app/) and downloading the results. The web app will export data in the exact format required by this R notebook.
 
 ### Manual Input Format
 If no CSV file is available, use manual input with these columns:
