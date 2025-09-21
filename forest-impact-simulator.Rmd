@@ -1,0 +1,464 @@
+---
+title: "Forest Impact Simulator"
+author: "Forest Carbon Analysis Tool"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+# Load required libraries
+library(tidyverse)
+library(ggplot2)
+library(jsonlite)
+library(readr)
+library(dplyr)
+library(plotly)
+```
+
+# Forest Impact Simulator
+
+This notebook simulates the environmental impact of forest planting or clear-cutting activities. It calculates carbon sequestration/loss, biodiversity impact, and other environmental metrics.
+
+## 1. Data Input
+
+### Option A: Upload CSV File
+
+If you have a CSV file with forest data, upload it here. The file should contain columns for land identification, area, tree types, and carbon data.
+
+```{r data-input, echo=FALSE, message=FALSE}
+# Check if sample data file exists
+sample_file <- "sample-forest-planting-data.csv"
+if (file.exists(sample_file)) {
+  cat("**Sample data file found!** Loading data...\n\n")
+  
+  # Read the sample data file
+  lines <- readLines(sample_file)
+  
+  # Parse the structured data
+  metadata_start <- which(lines == "METADATA") + 1
+  trees_start <- which(lines == "SELECTED TREES") + 1
+  env_start <- which(lines == "ENVIRONMENTAL DATA") + 1
+  impact_start <- which(lines == "IMPACT RESULTS") + 1
+  planting_start <- which(lines == "PLANTING DATA") + 1
+  
+  # Extract metadata
+  metadata_lines <- lines[metadata_start:(trees_start-2)]
+  metadata <- data.frame(
+    Parameter = sapply(strsplit(metadata_lines, ","), `[`, 1),
+    Value = sapply(strsplit(metadata_lines, ","), function(x) paste(x[-1], collapse = ","))
+  )
+  
+  # Extract tree data
+  tree_lines <- lines[trees_start:(env_start-2)]
+  tree_header <- strsplit(tree_lines[1], ",")[[1]]
+  tree_data <- data.frame(
+    Name = sapply(strsplit(tree_lines[-1], ","), `[`, 1),
+    Scientific_Name = sapply(strsplit(tree_lines[-1], ","), `[`, 2),
+    Carbon_Sequestration = as.numeric(sapply(strsplit(tree_lines[-1], ","), `[`, 3)),
+    Percentage = sapply(strsplit(tree_lines[-1], ","), `[`, 4)
+  )
+  
+  # Extract environmental data
+  env_lines <- lines[env_start:(impact_start-2)]
+  env_data <- data.frame(
+    Metric = sapply(strsplit(env_lines[-1], ","), `[`, 1),
+    Value = sapply(strsplit(env_lines[-1], ","), function(x) paste(x[-1], collapse = ","))
+  )
+  
+  # Extract impact results
+  impact_lines <- lines[impact_start:(planting_start-2)]
+  impact_data <- data.frame(
+    Metric = sapply(strsplit(impact_lines[-1], ","), `[`, 1),
+    Value = sapply(strsplit(impact_lines[-1], ","), function(x) paste(x[-1], collapse = ","))
+  )
+  
+  # Extract planting data
+  planting_lines <- lines[planting_start:length(lines)]
+  planting_data <- data.frame(
+    Metric = sapply(strsplit(planting_lines[-1], ","), `[`, 1),
+    Value = sapply(strsplit(planting_lines[-1], ","), function(x) paste(x[-1], collapse = ","))
+  )
+  
+  # Display loaded data
+  cat("**Metadata:**\n")
+  print(metadata)
+  
+  cat("\n**Tree Data:**\n")
+  print(tree_data)
+  
+  cat("\n**Environmental Data:**\n")
+  print(env_data)
+  
+  cat("\n**Impact Results:**\n")
+  print(impact_data)
+  
+  cat("\n**Planting Data:**\n")
+  print(planting_data)
+  
+} else {
+  cat("**No sample data file found.** Please provide your own data or use manual input below.\n\n")
+}
+```
+
+### Option B: Manual Data Input
+
+If you don't have a CSV file, you can manually input your forest data here:
+
+```{r manual-input, echo=FALSE}
+# Manual data input section
+cat("## Manual Data Input\n\n")
+cat("Please modify the following data frames with your forest data:\n\n")
+
+# Create sample data structure for manual input
+land_data <- data.frame(
+  land_id = c("Plot_001", "Plot_002", "Plot_003"),
+  area_ha = c(0.1, 0.15, 0.2),
+  tree_type = c("Oak", "Pine", "Mixed"),
+  carbon_per_ha = c(110, 125, 118),
+  biodiversity_score = c(4.5, 4.2, 4.8),
+  resilience_score = c(4.3, 4.0, 4.6),
+  stringsAsFactors = FALSE
+)
+
+cat("**Land Plot Data:**\n")
+print(land_data)
+
+# Location and simulation parameters
+location_data <- data.frame(
+  latitude = 50.56956736416948,
+  longitude = 28.159344338632376,
+  simulation_years = 50
+)
+
+cat("\n**Location and Simulation Parameters:**\n")
+print(location_data)
+```
+
+## 2. Mode Selection
+
+Select the simulation mode:
+
+```{r mode-selection, echo=FALSE}
+# Mode selection
+mode <- "planting"  # Change to "clear-cutting" for deforestation simulation
+
+cat(paste("**Selected Mode:**", toupper(mode), "\n\n"))
+
+if (mode == "planting") {
+  cat("🌱 **Planting Mode**: Calculating positive carbon sequestration from new forest growth\n")
+} else {
+  cat("🌲 **Clear-cutting Mode**: Calculating carbon loss from forest removal\n")
+}
+```
+
+## 3. Data Processing and Calculations
+
+```{r calculations, echo=TRUE}
+# Process the data based on mode
+if (exists("tree_data") && nrow(tree_data) > 0) {
+  # Use data from CSV file
+  current_data <- tree_data
+  area_ha <- as.numeric(planting_data$Value[planting_data$Metric == "Area (hectares)"])
+  simulation_years <- as.numeric(metadata$Value[metadata$Parameter == "Simulation Years"])
+  latitude <- as.numeric(metadata$Value[metadata$Parameter == "Latitude"])
+  longitude <- as.numeric(metadata$Value[metadata$Parameter == "Longitude"])
+  
+  # Create land data from existing structure
+  land_data <- data.frame(
+    land_id = paste0("Plot_", 1:nrow(current_data)),
+    area_ha = area_ha / nrow(current_data),
+    tree_type = current_data$Name,
+    carbon_per_ha = current_data$Carbon_Sequestration,
+    biodiversity_score = rep(4.5, nrow(current_data)),
+    resilience_score = rep(4.5, nrow(current_data)),
+    stringsAsFactors = FALSE
+  )
+  
+  location_data <- data.frame(
+    latitude = latitude,
+    longitude = longitude,
+    simulation_years = simulation_years
+  )
+} else {
+  # Use manual data
+  simulation_years <- location_data$simulation_years
+}
+
+# Calculate CO2 impact based on mode
+if (mode == "planting") {
+  land_data$co2_impact_tons <- land_data$area_ha * land_data$carbon_per_ha * simulation_years
+  mode_multiplier <- 1
+  impact_type <- "Carbon Sequestration"
+} else {
+  land_data$co2_impact_tons <- -(land_data$area_ha * land_data$carbon_per_ha * simulation_years)
+  mode_multiplier <- -1
+  impact_type <- "Carbon Loss"
+}
+
+# Calculate totals and averages
+total_carbon <- sum(land_data$co2_impact_tons)
+average_biodiversity <- mean(land_data$biodiversity_score)
+average_resilience <- mean(land_data$resilience_score)
+total_area <- sum(land_data$area_ha)
+total_trees <- round(total_area * 625)  # Assuming 625 trees per hectare
+
+# Display results
+cat("## Calculation Results\n\n")
+cat("**Land Plot Calculations:**\n")
+print(land_data)
+
+cat(paste("\n**Summary Statistics:**\n"))
+cat(paste("- Total", impact_type, ":", round(total_carbon, 2), "kg CO2\n"))
+cat(paste("- Total Area:", round(total_area, 3), "hectares\n"))
+cat(paste("- Average Biodiversity Score:", round(average_biodiversity, 2), "/5\n"))
+cat(paste("- Average Resilience Score:", round(average_resilience, 2), "/5\n"))
+cat(paste("- Total Trees:", total_trees, "\n"))
+```
+
+## 4. Data Visualization
+
+### CO2 Impact by Land Plot
+
+```{r co2-bar-chart, fig.width=10, fig.height=6}
+# Create bar chart for CO2 impact per land plot
+co2_plot <- ggplot(land_data, aes(x = land_id, y = co2_impact_tons, fill = tree_type)) +
+  geom_bar(stat = "identity", alpha = 0.8) +
+  geom_text(aes(label = paste(round(co2_impact_tons, 1), "kg CO2")), 
+            vjust = -0.5, size = 3.5) +
+  labs(
+    title = paste("CO2 Impact by Land Plot -", impact_type),
+    subtitle = paste("Total:", round(total_carbon, 2), "kg CO2 over", simulation_years, "years"),
+    x = "Land Plot ID",
+    y = paste("CO2", ifelse(mode == "planting", "Sequestration", "Loss"), "(kg)"),
+    fill = "Tree Type"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 12),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  ) +
+  scale_fill_brewer(type = "qual", palette = "Set2")
+
+print(co2_plot)
+```
+
+### Environmental Metrics Comparison
+
+```{r metrics-comparison, fig.width=10, fig.height=6}
+# Create comparison chart for environmental metrics
+metrics_data <- land_data %>%
+  select(land_id, biodiversity_score, resilience_score) %>%
+  pivot_longer(cols = c(biodiversity_score, resilience_score), 
+               names_to = "metric", values_to = "score") %>%
+  mutate(metric = case_when(
+    metric == "biodiversity_score" ~ "Biodiversity Impact",
+    metric == "resilience_score" ~ "Forest Resilience"
+  ))
+
+metrics_plot <- ggplot(metrics_data, aes(x = land_id, y = score, fill = metric)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.8) +
+  geom_text(aes(label = paste(round(score, 1), "/5")), 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+  labs(
+    title = "Environmental Metrics by Land Plot",
+    x = "Land Plot ID",
+    y = "Score (out of 5)",
+    fill = "Metric"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  ) +
+  scale_fill_brewer(type = "qual", palette = "Set1") +
+  ylim(0, 5)
+
+print(metrics_plot)
+```
+
+### Area Distribution
+
+```{r area-pie-chart, fig.width=8, fig.height=8}
+# Create pie chart for area distribution
+area_plot <- ggplot(land_data, aes(x = "", y = area_ha, fill = tree_type)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  geom_text(aes(label = paste(tree_type, "\n", round(area_ha, 3), "ha")), 
+            position = position_stack(vjust = 0.5), size = 4) +
+  labs(
+    title = "Area Distribution by Tree Type",
+    fill = "Tree Type"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    legend.position = "none"
+  ) +
+  scale_fill_brewer(type = "qual", palette = "Set2")
+
+print(area_plot)
+```
+
+## 5. Output Generation
+
+### Save Processed Data as CSV
+
+```{r save-csv}
+# Create output directory if it doesn't exist
+if (!dir.exists("output")) {
+  dir.create("output")
+}
+
+# Save processed land data
+output_csv <- "output/processed_forest_data.csv"
+write.csv(land_data, output_csv, row.names = FALSE)
+
+cat(paste("✅ Processed data saved to:", output_csv, "\n\n"))
+```
+
+### Generate JSON Output (Web App Compatible)
+
+```{r generate-json}
+# Create JSON structure matching web app format
+timestamp <- format(Sys.time(), "%Y-%m-%dT%H:%M:%S.000Z")
+
+# Calculate additional metrics
+water_retention <- 94  # Default value, could be calculated from environmental data
+air_quality_improvement <- 95  # Default value, could be calculated from environmental data
+annual_carbon <- total_carbon / simulation_years
+
+# Create the JSON structure
+json_output <- list(
+  metadata = list(
+    timestamp = timestamp,
+    simulatorVersion = "1.0.0",
+    location = list(
+      latitude = location_data$latitude,
+      longitude = location_data$longitude,
+      type = "Point"
+    ),
+    simulation = list(
+      years = simulation_years,
+      mode = mode,
+      totalPlots = nrow(land_data)
+    )
+  ),
+  environmentalData = list(
+    soil = list(
+      carbon = as.numeric(env_data$Value[env_data$Metric == "Soil Carbon (g/kg)"]),
+      pH = as.numeric(env_data$Value[env_data$Metric == "Soil pH"])
+    ),
+    climate = list(
+      temperature = as.numeric(env_data$Value[env_data$Metric == "Temperature (°C)"]),
+      precipitation = as.numeric(env_data$Value[env_data$Metric == "Precipitation (mm)"])
+    )
+  ),
+  impactResults = list(
+    carbonSequestration = ifelse(mode == "planting", annual_carbon, -annual_carbon),
+    biodiversityImpact = average_biodiversity,
+    forestResilience = average_resilience,
+    waterRetention = water_retention,
+    airQualityImprovement = air_quality_improvement,
+    totalCarbon = total_carbon,
+    averageBiodiversity = average_biodiversity,
+    averageResilience = average_resilience
+  ),
+  plantingData = list(
+    area = total_area,
+    totalTrees = total_trees,
+    spacing = 4,
+    density = 625,
+    timeline = simulation_years,
+    plots = land_data
+  )
+)
+
+# Save JSON file
+output_json <- "output/forest_impact_results.json"
+write_json(json_output, output_json, pretty = TRUE, auto_unbox = TRUE)
+
+cat(paste("✅ JSON results saved to:", output_json, "\n\n"))
+
+# Display summary
+cat("## Final Summary\n\n")
+cat("**Simulation Results:**\n")
+cat(paste("- Mode:", toupper(mode), "\n"))
+cat(paste("- Total", impact_type, ":", round(total_carbon, 2), "kg CO2\n"))
+cat(paste("- Annual", impact_type, ":", round(annual_carbon, 2), "kg CO2/year\n"))
+cat(paste("- Simulation Period:", simulation_years, "years\n"))
+cat(paste("- Number of Plots:", nrow(land_data), "\n"))
+cat(paste("- Total Area:", round(total_area, 3), "hectares\n"))
+cat(paste("- Average Biodiversity:", round(average_biodiversity, 2), "/5\n"))
+cat(paste("- Average Resilience:", round(average_resilience, 2), "/5\n"))
+```
+
+## 6. Additional Analysis (Optional)
+
+### Yearly Carbon Accumulation Projection
+
+```{r yearly-projection, fig.width=12, fig.height=6, eval=FALSE}
+# Optional: Create yearly carbon accumulation projection
+if (simulation_years > 1 && mode == "planting") {
+  yearly_data <- expand.grid(
+    year = 1:simulation_years,
+    land_id = land_data$land_id,
+    tree_type = land_data$tree_type
+  ) %>%
+    left_join(land_data, by = c("land_id", "tree_type")) %>%
+    mutate(
+      # Assume linear growth for simplicity (could be more complex)
+      cumulative_carbon = (area_ha * carbon_per_ha * year) / simulation_years
+    )
+  
+  yearly_plot <- ggplot(yearly_data, aes(x = year, y = cumulative_carbon, color = tree_type)) +
+    geom_line(size = 1.2) +
+    geom_point(size = 2) +
+    labs(
+      title = "Cumulative Carbon Sequestration Over Time",
+      x = "Year",
+      y = "Cumulative Carbon (kg CO2)",
+      color = "Tree Type"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      legend.position = "bottom"
+    ) +
+    scale_color_brewer(type = "qual", palette = "Set2")
+  
+  print(yearly_plot)
+}
+```
+
+---
+
+## Instructions for Use
+
+1. **Data Input**: Either upload a CSV file with forest data or modify the manual input section with your data.
+
+2. **Mode Selection**: Change the `mode` variable to either "planting" or "clear-cutting" based on your simulation needs.
+
+3. **Run Analysis**: Execute all code chunks sequentially to perform calculations and generate visualizations.
+
+4. **Output Files**: Check the `output/` directory for:
+   - `processed_forest_data.csv`: Processed data in CSV format
+   - `forest_impact_results.json`: Results in JSON format compatible with the web app
+
+5. **Customization**: Modify the environmental metrics, tree types, or calculation methods as needed for your specific use case.
+
+## Notes
+
+- Carbon calculations assume linear accumulation over the simulation period
+- Biodiversity and resilience scores are on a 1-5 scale
+- Water retention and air quality improvement are set to default values (can be customized)
+- The JSON output structure matches the Forest Impact Simulator web app format
+- All calculations are based on the input data and selected simulation mode
+
+---
+
+*Generated by Forest Impact Simulator R Notebook - Version 1.0.0*
