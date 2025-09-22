@@ -1,4 +1,0 @@
-land_id,area_ha,tree_type,scientific_name,carbon_per_ha,biodiversity_score,resilience_score,latitude,longitude,simulation_years,soil_carbon,soil_ph,temperature,precipitation
-Plot_001,0.20,Oak,Quercus robur,22,4.5,4.5,50.56956736416948,28.159344338632376,50,,,22.4,
-Plot_002,0.15,Pine,Pinus sylvestris,18,4.2,4.0,50.56956736416948,28.159344338632376,50,,,22.4,
-Plot_003,0.25,Mixed,Quercus robur,20,4.8,4.6,50.56956736416948,28.159344338632376,50,,,22.4,
